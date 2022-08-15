@@ -197,6 +197,14 @@ Resources:
 
   status:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2020
+        Sourcemap: true
+        Entrypoints:
+          - status.ts
     Properties:
       Handler: src/handlers/status.handler
       Runtime: nodejs16.x
