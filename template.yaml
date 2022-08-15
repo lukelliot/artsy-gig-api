@@ -1,0 +1,248 @@
+# This is the SAM template that represents the architecture of your serverless application
+# https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-template-basics.html
+
+# The AWSTemplateFormatVersion identifies the capabilities of the template
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/format-version-structure.html
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  artsy-gig-api
+
+# Transform section specifies one or more macros that AWS CloudFormation uses to process your template
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/transform-section-structure.html
+Transform:
+- AWS::Serverless-2016-10-31
+
+# Resources declares the AWS resources that you want to include in the stack
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resources-section-structure.html
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Tracing: Active
+  Api:
+    TracingEnabled: True
+    OpenApiVersion: 3.0.1
+
+Resources:
+  ServerlessRestApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      AccessLogSetting:
+        DestinationArn: !GetAtt ServerlessRestApiLogs.Arn
+      StageName: v1
+      Cors:
+        AllowCredentials: true
+        AllowHeaders: "*"
+        AllowOrigin: "*"
+        MaxAge: "600"
+
+  ServerlessRestApiLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/api/${ServerlessRestApi}
+      RetentionInDays: 30
+
+  OptionsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Runtime: nodejs16.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 100
+      InlineCode: |
+        exports.handler = async function() {
+          const response = {
+            statusCode: 204,
+            headers: {
+              'Access-Control-Allow-Headers': '*',
+              'Access-Control-Allow-Origin': '*', // Allow from anywhere
+              'Access-Control-Allow-Methods': '*', // Allow only GET request
+            },
+            isBase64Encoded: false,
+          }
+          console.log('OPTIONS', response)
+          return response
+        }
+      Events:
+        indexOptions:
+          Type: Api
+          Properties:
+            Path: /
+            Method: OPTIONS
+            RestApiId: !Ref ServerlessRestApi
+        getByIdOptions:
+          Type: Api
+          Properties:
+            Path: /{id}
+            Method: OPTIONS
+            RestApiId: !Ref ServerlessRestApi
+        statusOptions:
+          Type: Api
+          Properties:
+            Path: /status
+            Method: OPTIONS
+            RestApiId: !Ref ServerlessRestApi
+
+
+  OptionsFunctionLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${OptionsFunction}
+      RetentionInDays: 30
+  # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+
+  # This is a Lambda function config associated with the source code: get-all-items.js
+  getAllItemsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/get-all-items.getAllItemsHandler
+      Runtime: nodejs16.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 100
+      Description: A simple example includes a HTTP get method to get all items from a DynamoDB table.
+      Policies:
+        # Give Create/Read/Update/Delete Permissions to the SampleTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref SampleTable
+      Environment:
+        Variables:
+          # Make table name accessible as environment variable from function code during execution
+          SAMPLE_TABLE: !Ref SampleTable
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /
+            Method: GET
+            RestApiId: !Ref ServerlessRestApi
+
+  GetAllItemsFunctionLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${getAllItemsFunction}
+      RetentionInDays: 30
+  # Each Lambda function is defined by properties:
+  # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+
+  # This is a Lambda function config associated with the source code: get-by-id.js
+  getByIdFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/get-by-id.getByIdHandler
+      Runtime: nodejs16.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 100
+      Description: A simple example includes a HTTP get method to get one item by id from a DynamoDB table.
+      Policies:
+        # Give Create/Read/Update/Delete Permissions to the SampleTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref SampleTable
+      Environment:
+        Variables:
+          # Make table name accessible as environment variable from function code during execution
+          SAMPLE_TABLE: !Ref SampleTable
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /{id}
+            Method: GET
+            RestApiId: !Ref ServerlessRestApi
+
+  GetByIdFunctionLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${getByIdFunction}
+      RetentionInDays: 30
+  # Each Lambda function is defined by properties:
+  # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+
+  # This is a Lambda function config associated with the source code: put-item.js
+  putItemFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/put-item.putItemHandler
+      Runtime: nodejs16.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 100
+      Description: A simple example includes a HTTP post method to add one item to a DynamoDB table.
+      Policies:
+        # Give Create/Read/Update/Delete Permissions to the SampleTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref SampleTable
+      Environment:
+        Variables:
+          # Make table name accessible as environment variable from function code during execution
+          SAMPLE_TABLE: !Ref SampleTable
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /
+            Method: POST
+            RestApiId: !Ref ServerlessRestApi
+
+  PutItemFunctionLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${putItemFunction}
+      RetentionInDays: 30
+
+  status:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/status.handler
+      Runtime: nodejs16.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 100
+      Description: A simple example includes a HTTP post method to add one item to a DynamoDB table.
+      Policies:
+        # Give Create/Read/Update/Delete Permissions to the SampleTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref SampleTable
+      Environment:
+        Variables:
+          # Make table name accessible as environment variable from function code during execution
+          SAMPLE_TABLE: !Ref SampleTable
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /status
+            Method: GET
+            RestApiId: !Ref ServerlessRestApi
+
+  StatusFunctionLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${status}
+      RetentionInDays: 30
+
+
+  # Simple syntax to create a DynamoDB table with a single attribute primary key, more in
+  # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlesssimpletable
+
+  # DynamoDB table to store item: {id: &lt;ID&gt;, name: &lt;NAME&gt;}
+  SampleTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      PrimaryKey:
+        Name: id
+        Type: String
+      ProvisionedThroughput:
+        ReadCapacityUnits: 2
+        WriteCapacityUnits: 2
+
+Outputs:
+  WebEndpoint:
+    Description: "API Gateway endpoint URL for Prod stage"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/${ServerlessRestApi.Stage}/"
